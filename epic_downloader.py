@@ -77,7 +77,7 @@ class EpicDownloader:
     @staticmethod
     def parse_bool(b):
         return b.lower().strip() in ['true', 'yes', 'y']
-    
+
     @staticmethod
     def md5_checksum(path):
         hash_md5 = hashlib.md5()
@@ -204,14 +204,15 @@ class EpicDownloader:
                             from_url=self.base_url_masks, output_parts=output_masks_parts)
 
     def download_items(self, video_dicts, epic_55_parts_func, epic_100_parts_func, from_url=None, output_parts=None):
-        for video_id, d in video_dicts.items():
+        # for video_id, d in video_dicts.items():
+        def download_one(d):
             extension = d['extension']
             remote_parts = epic_100_parts_func(d) if extension else epic_55_parts_func(d)
             erratum_url = self.errata.get('/'.join(remote_parts), None)
 
             if erratum_url is None:
-                if self.errata_only:
-                    continue
+                # if self.errata_only:
+                #     continue
 
                 if from_url is None:
                     base_url = self.base_url_100 if extension else self.base_url_55
@@ -224,7 +225,7 @@ class EpicDownloader:
                 print_header('~ Going to download an erratum now! ~', char='~')
                 url = erratum_url
                 version = 'errata'
-
+            nonlocal output_parts
             output_parts = epic_100_parts_func if output_parts is None else output_parts
             output_path = os.path.join(self.base_output, *output_parts(d))
 
@@ -233,13 +234,17 @@ class EpicDownloader:
             else:
                 self.download_file(url, output_path)
 
+        vals = list(video_dicts.values())
+        from easyvolcap.utils.parallel_utils import parallel_execution
+        parallel_execution(vals, action=download_one, print_progress=True)
+
     def file_already_downloaded(self, output_path, parts, version):
         if not os.path.exists(output_path):
             return False
 
         key = '/'.join(parts)
         remote_md5 = self.md5[version].get(key, None)
-        
+
         if remote_md5 is None:
             return False
 
@@ -288,7 +293,7 @@ class EpicDownloader:
 
         # sorting the dictionary
         video_dicts = {k: video_dicts[k] for k in sorted(video_dicts.keys())}
-        
+
         if epic55_only:
             source = 'EPIC 55'
         elif extension_only:
@@ -298,7 +303,7 @@ class EpicDownloader:
 
         what_str = ', '.join(' '.join(w.split('_')) for w in what)
         if participants == 'all':
-            participants_str = 'all'  
+            participants_str = 'all'
         elif type(participants[0]) == int:
             participants_str = ', '.join(['P{:02d}'.format(p) for p in participants])
         else:
@@ -312,7 +317,7 @@ class EpicDownloader:
                   'participants: {}\n'
                   'specific videos: {}\n'
                   'data source: {}'.format(what_str, challenges, splits, participants_str, videos_str, source))
-        
+
         for w in what:
             if not self.errata_only:
                 print_header('| Downloading {} now |'.format(' '.join(w.split('_'))), char='-')
@@ -342,7 +347,7 @@ def create_parser():
                         help='Specify participants IDs. You can specify a single participant, e.g. `--participants 1` '
                              'or a comma-separated list of them, e.g. `--participants 1,2,3`')
     parser.add_argument('--specific-videos', nargs='?', type=str, default='all', help='Specify video IDs. You can specify a single video, e.g. `--participants P01_01` '
-                             'or a comma-separated list of them, e.g. `--participants P01_01,P01_02,P01_03`')
+                        'or a comma-separated list of them, e.g. `--participants P01_01,P01_02,P01_03`')
     parser.add_argument('--extension-only', action='store_true', help='Download extension only')
     parser.add_argument('--epic55-only', action='store_true', help='Download only EPIC 55\'s data')
     parser.add_argument('--action-recognition', dest='challenges', action='append_const', const='ar',
@@ -416,11 +421,11 @@ def parse_args(parser):
     if args.specific_videos != 'all':
         args.specific_videos = [v.strip() for v in args.specific_videos.split(',')]
         assert all(
-                len(x.split("_")[0]) == 3 
-                and (len(x.split("_")[1]) == 2 or len(x.split("_")[1]) == 3) 
-                and x[0] == "P"
-                for x in args.specific_videos
-            ), 'A video ID is wrongly formatted. Please ensure all video IDs are of the form PXX_YY(Y).'
+            len(x.split("_")[0]) == 3
+            and (len(x.split("_")[1]) == 2 or len(x.split("_")[1]) == 3)
+            and x[0] == "P"
+            for x in args.specific_videos
+        ), 'A video ID is wrongly formatted. Please ensure all video IDs are of the form PXX_YY(Y).'
 
     if args.errata:
         args.what = tuple(w for w in args.what if w != 'consent_forms')
@@ -437,7 +442,7 @@ if __name__ == '__main__':
 
     print_header('*** Welcome to the EPIC Kitchens Downloader! ***')
 
-    downloader = EpicDownloader(base_output=args.output_path,  errata_only=args.errata)
+    downloader = EpicDownloader(base_output=args.output_path, errata_only=args.errata)
     downloader.download(what=args.what, participants=args.participants, specific_videos=args.specific_videos, splits=args.splits, challenges=args.challenges,
                         extension_only=args.extension_only, epic55_only=args.epic55_only)
 
